@@ -1,9 +1,5 @@
 /target
 
-/output/**
-/movies/**
-/upload/**
-
 .adr-dir
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust
@@ -14,6 +10,7 @@
 # will have compiled files and executables
 debug/
 target/
+
 
 # Remove Cargo.lock from gitignore if creating an executable, leave it for libraries
 # More information here https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html

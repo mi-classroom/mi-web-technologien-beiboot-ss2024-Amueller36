@@ -80,7 +80,7 @@ async fn upload_file(mut payload: Multipart) -> HttpResponse {
 
         // Perform long exposure image creation
         let path_to_extracted_images = format!("{}/{}/", output_dir, movie_file_id);
-        if let Err(e) = create_long_exposure_image(Path::new(&path_to_extracted_images)) {
+        if let Err(e) = create_long_exposure_image(Path::new(&path_to_extracted_images)).await {
             eprintln!("Failed to create long exposure image: {}", e);
         }
     }
