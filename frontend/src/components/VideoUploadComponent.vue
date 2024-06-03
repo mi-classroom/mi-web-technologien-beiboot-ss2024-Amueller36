@@ -16,10 +16,14 @@
     <VueSlider v-model="sliderValue" :min="0" :max="uploadedVideoDuration" :tooltip="'always'"
       @change="adjustShownTimelineImages"></VueSlider>
     <p>Slider Value {{ sliderValue }}</p>
+    <button v-if="allFrames.length != 0" @click="showTimeline = !showTimeline">
+        {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
+      </button>
     <div v-if="showTimeline" class="timeline-container">
       <div class="timeline-buttons">
         <button @click="unselectAllFrames">Unselect All Frames</button>
         <button @click="sendUnselectedFrames">Send Unselected Frames for Image generation</button>
+
       </div>
 
       <div class="timeline">
@@ -29,9 +33,17 @@
           <div class="tooltip">{{ 'Frame: ' + frame.frameNumber + ', Time: ' + frame.time + 's' }}</div>
         </div>
       </div>
+
+      <div class="timeline-buttons">
+        <button @click="unselectAllFrames">Unselect All Frames</button>
+        <button @click="sendUnselectedFrames">Send Unselected Frames for Image generation</button>
+
+      </div>
     </div>
     <div v-if="longExposureImageUrl" class="long-exposure-image">
-      <button v-if=!showTimeline @click="showTimeline = true">Show Timeline</button>
+      <button @click="showTimeline = !showTimeline">
+        {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
+      </button>
       <h2>Long Exposure Image</h2>
       <img :src="longExposureImageUrl" />
     </div>
@@ -41,51 +53,50 @@
 
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, type Ref } from 'vue';
 import axios from 'axios';
-import VueSlider from 'vue-3-slider-component'
+import VueSlider from 'vue-3-slider-component';
 
-// Read the backend URL from the environment variables
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
-console.log('Backend URL:', BACKEND_URL)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+console.log('Backend URL:', BACKEND_URL);
 
-
-
-const videoPlayer = ref(null)
-const videoFile = ref(null)
-const uploadedVideoUUID = ref('')
-const usersLocalPathToUploadedVideo = ref('')
+const videoPlayer: Ref<HTMLVideoElement | null> = ref(null);
+const videoFile: Ref<File | null> = ref(null);
+const uploadedVideoUUID: Ref<string> = ref('');
+const usersLocalPathToUploadedVideo: Ref<string> = ref('');
 
 // Video Cut Settings
-const scale = ref('')
-const framesPerSecond = ref(null)
+const scale: Ref<string> = ref('');
+const framesPerSecond: Ref<number | null> = ref(null);
 
 // Timeline
-const sliderValue = ref([0, 0]);
-const extractedFrames = ref([])
-const selectedFrames = ref([])
-const allFrames = ref([])
-const lastSelectedFrame = ref(null)
-const showTimeline = ref(true)
-//Video Metadata
-const uploadedVideoDuration = ref(null)
-const uploadedVideoFps = ref(0)
+const sliderValue: Ref<number[]> = ref([0, 0]);
+const extractedFrames: Ref<{ src: string; frameNumber: number; time: string; }[]> = ref([]);
+const selectedFrames: Ref<{ src: string; frameNumber: number; time: string; }[]> = ref([]);
+const allFrames: Ref<{ src: string; frameNumber: number; time: string; }[]> = ref([]);
+const lastSelectedFrame: Ref<{ src: string; frameNumber: number; time: string; } | null> = ref(null);
+const showTimeline: Ref<boolean> = ref(true);
 
-//Long Exposure Image
-let longExposureImageUrl = ref(null)
+// Video Metadata
+const uploadedVideoDuration: Ref<number> = ref(0);
+const uploadedVideoFps: Ref<number> = ref(0);
+
+// Long Exposure Image
+const longExposureImageUrl: Ref<string | null> = ref(null);
 
 interface UploadResponse {
-  message: string
-  video_id: string
+  message: string;
+  video_id: string;
 }
 
 const displayVideoInPlayer = (event: Event) => {
-  if (event.target) {
-    videoFile.value = event?.target?.files[0]
+  const target = event.target as HTMLInputElement;
+  if (target.files && target.files.length > 0) {
+    videoFile.value = target.files[0];
+    usersLocalPathToUploadedVideo.value = URL.createObjectURL(videoFile.value);
+    resetTimelineRefsToDefault();
   }
-  usersLocalPathToUploadedVideo.value = URL.createObjectURL(videoFile.value)
-  resetTimelineRefsToDefault()
-}
+};
 
 const unselectAllFrames = () => {
   selectedFrames.value = [];
@@ -97,38 +108,38 @@ const unselectAllFrames = () => {
 };
 
 const resetTimelineRefsToDefault = () => {
-  allFrames.value = []
-  extractedFrames.value = []
-  selectedFrames.value = []
-  lastSelectedFrame.value = null
-  longExposureImageUrl.value = null
-}
+  allFrames.value = [];
+  extractedFrames.value = [];
+  selectedFrames.value = [];
+  lastSelectedFrame.value = null;
+  longExposureImageUrl.value = null;
+};
+
 const uploadVideoScaleAndCutIntoFrames = async () => {
   if (!videoFile.value || !framesPerSecond.value) {
-    console.error('Missing required fields')
-    return
+    console.error('Missing required fields');
+    return;
   }
-  resetTimelineRefsToDefault()
+  resetTimelineRefsToDefault();
 
-  const formData = new FormData()
-  formData.append('video_file', videoFile.value)
-  formData.append('scale', scale.value)
-  formData.append('fps', framesPerSecond.value.toString())
+  const formData = new FormData();
+  formData.append('video_file', videoFile.value);
+  formData.append('scale', scale.value);
+  formData.append('fps', framesPerSecond.value.toString());
 
   try {
     const response = await axios.post(`${BACKEND_URL}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    })
-    console.log("Should have uploaded the video now.")
-    const upload_response: UploadResponse = response.data;
-    uploadedVideoUUID.value = upload_response.video_id
-    // Handle the response data
+    });
+    console.log("Should have uploaded the video now.");
+    const uploadResponse: UploadResponse = response.data;
+    uploadedVideoUUID.value = uploadResponse.video_id;
 
-    // Prepare Urls for all frames
     const allFramesArr = [];
-    for (let i = 1; i <= Math.ceil(uploadedVideoDuration.value * framesPerSecond.value); i++) {
+    const duration = uploadedVideoDuration.value || 0;
+    for (let i = 1; i <= Math.ceil(duration * framesPerSecond.value); i++) {
       allFramesArr.push({
         src: `http://localhost:8080/outputs/${uploadedVideoUUID.value}/frames/ffout_${i.toString().padStart(4, '0')}.png`,
         frameNumber: i,
@@ -138,43 +149,36 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
     allFrames.value = allFramesArr;
     adjustShownTimelineImages(sliderValue.value, 1);
   } catch (error) {
-    console.error('Error uploading video:', error)
+    console.error('Error uploading video:', error);
   }
-}
+};
 
-const adjustShownTimelineImages = (value, index) => {
-  sliderValue.value = value
+const adjustShownTimelineImages = (value: number[], index: number) => {
+  sliderValue.value = value;
 
   if (index === 0) {
-    videoPlayer.value.currentTime = value[0]
+    if (videoPlayer.value) videoPlayer.value.currentTime = value[0];
   } else {
-    videoPlayer.value.currentTime = value[1]
+    if (videoPlayer.value) videoPlayer.value.currentTime = value[1];
   }
   const [start, end] = value;
-  const startFrame = Math.ceil(start * framesPerSecond.value);
-  const endFrame = Math.ceil(end * framesPerSecond.value) > 0 ? Math.ceil(end * framesPerSecond.value) : 1;
-
-  console.log('Start Frame:', startFrame, 'End Frame:', endFrame);
-  console.log('All Frames:', allFrames.value);
-
+  const startFrame = Math.ceil(start * (framesPerSecond.value || 0));
+  const endFrame = Math.ceil(end * (framesPerSecond.value || 0)) > 0 ? Math.ceil(end * (framesPerSecond.value || 0)) : 1;
 
   extractedFrames.value = allFrames.value.slice(startFrame, endFrame);
-  console.log('Extracted Frames:', extractedFrames.value);
+};
 
-}
-
-
-const formatTime = (seconds) => {
+const formatTime = (seconds: number): string => {
   const minutes = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-}
+};
 
-const toggleFrameSelection = (frame, event) => {
+const toggleFrameSelection = (frame: { src: string; frameNumber: number; time: string }, event: MouseEvent) => {
   const index = selectedFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
 
   if (event.shiftKey && lastSelectedFrame.value !== null) {
-    const lastFrameIndex = extractedFrames.value.findIndex(f => f.frameNumber === lastSelectedFrame.value.frameNumber);
+    const lastFrameIndex = extractedFrames.value.findIndex(f => f.frameNumber === lastSelectedFrame.value?.frameNumber);
     const currentFrameIndex = extractedFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
 
     const [start, end] = lastFrameIndex < currentFrameIndex
@@ -206,11 +210,10 @@ const toggleFrameSelection = (frame, event) => {
   }
 };
 
-const isFrameSelected = (frame) => {
+const isFrameSelected = (frame: { frameNumber: number }): boolean => {
   return selectedFrames.value.some(f => f.frameNumber === frame.frameNumber);
 };
 
-// Sends the selected Frames to the backend to create long expose image
 const sendUnselectedFrames = async () => {
   try {
     if (!uploadedVideoUUID.value) {
@@ -221,10 +224,6 @@ const sendUnselectedFrames = async () => {
       console.log('Long Exposure Image was previously created deleting it.');
       longExposureImageUrl.value = null;
     }
-
-    console.log('Selected Frames:', selectedFrames.value);
-
-    // Only include the non-selected frames
 
     const frameNumbersToInclude = allFrames.value
       .filter(frame => !selectedFrames.value.some(selectedFrame => selectedFrame.frameNumber === frame.frameNumber))
@@ -249,12 +248,13 @@ const sendUnselectedFrames = async () => {
 };
 
 onMounted(() => {
-  videoPlayer.value.addEventListener('loadedmetadata', () => {
-    uploadedVideoDuration.value = Math.floor(videoPlayer.value.duration)
-    // Update Slider Value so the second slider is set to the end of the video
-    sliderValue.value = [0, uploadedVideoDuration.value]
-  })
-})
+  if (videoPlayer.value) {
+    videoPlayer.value.addEventListener('loadedmetadata', () => {
+      uploadedVideoDuration.value = Math.floor(videoPlayer.value?.duration || 0);
+      sliderValue.value = [0, uploadedVideoDuration.value || 0];
+    });
+  }
+});
 </script>
 
 <style scoped>
@@ -331,6 +331,7 @@ button:active {
 
 .timeline-container {
   margin-top: 20px;
+  
 }
 
 .timeline-buttons {

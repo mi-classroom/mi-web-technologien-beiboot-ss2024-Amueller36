@@ -27,15 +27,3 @@ Hier ein paar ADR Beispiele aus dem letzten Semestern:
 
 Halten Sie die Anwendung, gerade in der Anfangsphase möglichst einfach, schlank und leichtgewichtig (KISS).
 
-## Time Tracking - Issue 1
-
-| Task                                                     | Time |
-|----------------------------------------------------------|------|
-| Research how Files uploads are handled                   | 3h   |
-| Evaluating Language Options                              | 1h   |
-| Coding Upload Functionality                              | 3h   |
-| Coding FFmpeg Call                                       | 1h   |
-| Researching Possible Image processing libraries for Rust | 2h   |
-| Coding different Image Long Time Exposure Algorithms     | 6h   |
-| Add parallel processing for more speed                   | 1h   |
-| Total                                                    | 17h  |
