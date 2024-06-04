@@ -1,7 +1,7 @@
 use actix_web;
+use actix_web::{FromRequest, HttpRequest, HttpResponse, post, Responder, web};
 use actix_web::dev::Payload;
 use actix_web::web::block;
-use actix_web::{post, web, FromRequest, HttpRequest, HttpResponse, Responder};
 use serde::Deserialize;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -19,7 +19,7 @@ struct CreateLongExposureImageRequest {
 pub async fn create_long_exposure_image_request(
     selected_frames: web::Json<CreateLongExposureImageRequest>,
 ) -> HttpResponse {
-    let img_result = web::block(|| {
+    let img_result = block(|| {
         let output_dir = get_output_dir();
         let selected_frames = selected_frames.into_inner();
 

@@ -2,8 +2,8 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
-use image::error::{ParameterError, ParameterErrorKind};
 use image::{ImageBuffer, ImageError, ImageResult, Rgba, RgbaImage};
+use image::error::{ParameterError, ParameterErrorKind};
 use rayon::prelude::*;
 use tracing::{debug, error, info};
 
@@ -107,7 +107,7 @@ pub async fn create_long_exposure_image(
         .map_err(|e| e.to_string())?;
     Ok(convert_image_path_to_serving_url(
         &long_exposure_image_file_path,
-    ))
+    ).await)
 }
 
 fn blend_max(pixel1: &Rgba<u8>, pixel2: &Rgba<u8>) -> Rgba<u8> {

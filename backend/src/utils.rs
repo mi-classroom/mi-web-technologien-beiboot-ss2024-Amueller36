@@ -1,3 +1,4 @@
+use std::env;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
@@ -5,6 +6,7 @@ use actix_web::web::BytesMut;
 use futures_util::TryStreamExt;
 use regex::Regex;
 use tokio::fs;
+use tokio::io::AsyncBufReadExt;
 use tracing::trace;
 
 pub async fn read_text_from_field(mut field: actix_multipart::Field) -> String {
@@ -52,23 +54,20 @@ pub async fn create_directory_if_not_created_yet(path: &str) {
         }
     }
 }
+pub async fn convert_image_path_to_serving_url(image_path: &PathBuf) -> String {
+    let domain = env::var("DOMAIN").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
-pub fn convert_image_path_to_serving_url(image_path: &PathBuf) -> String {
-    let domain = std::env::var("DOMAIN").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    // Resolve the absolute path and normalize it
+    let absolute_path = fs::canonicalize(image_path).await.unwrap();
 
-    let path = image_path.to_str().unwrap().to_string();
-    let path = path
-        .replace("\\", "/")
-        .replace("./media", "")
-        .replace("frames", "")
-        .replace("..", "");
+    // Convert the path to a string and replace backslashes with forward slashes
+    let path_str = absolute_path.to_str().unwrap().replace("\\", "/");
 
-    // Remove the first character if it is a slash
-    let final_path = if path.starts_with("/") {
-        path[1..].to_string()
-    } else {
-        path
-    };
+    // Split the path at /media/ and take the second part
+    let clean_path = path_str.splitn(2, "/media/").nth(1).unwrap_or(&path_str);
+
+    // Remove leading slashes
+    let final_path = clean_path.trim_start_matches('/');
 
     format!("{}/{}", domain, final_path)
 }
