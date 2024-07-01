@@ -6,6 +6,11 @@
       <input type="number" v-model.number="framesPerSecond" :min="1" :max="60" placeholder="Frames per Second (f.e. 24)"
         required />
       <button type="submit">Upload</button>
+      <div v-if="progressVisible" class="progress">
+        <div class="progress-bar" :style="{ width: uploadProgress + '%' }">{{ uploadProgress }}%</div>
+        <!-- <progress :value="uploadProgress" max="100"></progress>
+        <span>{{ uploadProgress }}%</span> -->
+      </div>
       <p>Uploaded Video ID: {{ uploadedVideoUUID }}</p>
     </form>
     <video ref="videoPlayer" :src="usersLocalPathToUploadedVideo" controls></video>
@@ -16,10 +21,10 @@
     <VueSlider v-model="sliderValue" :min="0" :max="uploadedVideoDuration" :tooltip="'always'"
       @change="adjustShownTimelineImages"></VueSlider>
     <p>Slider Value {{ sliderValue }}</p>
-    <button v-if="allFrames.length != 0" @click="showTimeline = !showTimeline">
-        {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
-      </button>
-    <div v-if="showTimeline" class="timeline-container">
+    <button v-if="videoWasCutIntoFrames" @click="showTimeline = !showTimeline">
+      {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
+    </button>
+    <div v-if="videoWasCutIntoFrames && showTimeline" class="timeline-container">
       <div class="timeline-buttons">
         <button @click="unselectAllFrames">Unselect All Frames</button>
         <button @click="sendUnselectedFrames">Send Unselected Frames for Image generation</button>
@@ -29,8 +34,13 @@
       <div class="timeline">
         <div v-for="frame in extractedFrames" :key="frame.frameNumber"
           :class="['timeline-item', { selected: isFrameSelected(frame) }]" @click="toggleFrameSelection(frame, $event)">
-          <img :src="frame.src" :alt="'Frame ' + frame.frameNumber" />
+          <img :src="frame.src" loading="lazy" :alt="'Frame ' + frame.frameNumber" />
           <div class="tooltip">{{ 'Frame: ' + frame.frameNumber + ', Time: ' + frame.time + 's' }}</div>
+          <div class="frame-details">
+            <label for="weight-{{frame.frameNumber}}">Weight:</label>
+            <input type="number" v-model.number="frame.weight" min="0" step="0.1" id="weight-{{frame.frameNumber}}"
+              @input="updateFrameWeight(frame)" @click.stop @mousedown.stop />
+          </div>
         </div>
       </div>
 
@@ -41,10 +51,10 @@
       </div>
     </div>
     <div v-if="longExposureImageUrl" class="long-exposure-image">
-      <button @click="showTimeline = !showTimeline">
+      <h2>Long Exposure Image</h2>
+      <button v-if="showTimeline" @click="showTimeline = !showTimeline">
         {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
       </button>
-      <h2>Long Exposure Image</h2>
       <img :src="longExposureImageUrl" />
     </div>
   </div>
@@ -53,9 +63,29 @@
 
 
 <script setup lang="ts">
-import { ref, onMounted, type Ref } from 'vue';
+import { ref, onMounted, computed, type Ref } from 'vue';
 import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import VueSlider from 'vue-3-slider-component';
+
+
+interface Frame {
+  src: string;
+  frameNumber: number;
+  time: string;
+  weight: number;
+}
+
+interface FrameToInclude {
+  frame_number: number;
+  frame_weight: number;
+}
+
+interface CreateLongExposureImageRequest {
+  video_id: string;
+  frames_to_include: FrameToInclude[];
+}
+
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 console.log('Backend URL:', BACKEND_URL);
@@ -71,15 +101,20 @@ const framesPerSecond: Ref<number | null> = ref(null);
 
 // Timeline
 const sliderValue: Ref<number[]> = ref([0, 0]);
-const extractedFrames: Ref<{ src: string; frameNumber: number; time: string; }[]> = ref([]);
-const selectedFrames: Ref<{ src: string; frameNumber: number; time: string; }[]> = ref([]);
-const allFrames: Ref<{ src: string; frameNumber: number; time: string; }[]> = ref([]);
-const lastSelectedFrame: Ref<{ src: string; frameNumber: number; time: string; } | null> = ref(null);
+const extractedFrames: Ref<Frame[]> = ref([]);
+const selectedFrames: Ref<Frame[]> = ref([]);
+const allFrames: Ref<Frame[]> = ref([]);
+const videoWasCutIntoFrames: Ref<boolean> = computed(() => {
+  return allFrames.value.length > 0;
+});
+const lastSelectedFrame: Ref<Frame | null> = ref(null);
 const showTimeline: Ref<boolean> = ref(true);
 
 // Video Metadata
 const uploadedVideoDuration: Ref<number> = ref(0);
-const uploadedVideoFps: Ref<number> = ref(0);
+const uploadProgress: Ref<number> = ref(0);
+const progressVisible: Ref<boolean> = ref(false);
+
 
 // Long Exposure Image
 const longExposureImageUrl: Ref<string | null> = ref(null);
@@ -89,7 +124,9 @@ interface UploadResponse {
   video_id: string;
 }
 
+
 const displayVideoInPlayer = (event: Event) => {
+  uploadedVideoUUID.value = 'Will be set after uploading the video';
   const target = event.target as HTMLInputElement;
   if (target.files && target.files.length > 0) {
     videoFile.value = target.files[0];
@@ -121,6 +158,7 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
     return;
   }
   resetTimelineRefsToDefault();
+  progressVisible.value = true;
 
   const formData = new FormData();
   formData.append('video_file', videoFile.value);
@@ -132,24 +170,34 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.lengthComputable) {
+          uploadProgress.value = Math.round((progressEvent.loaded / (progressEvent.total ?? 100)) * 100);
+        }
+      }
     });
     console.log("Should have uploaded the video now.");
     const uploadResponse: UploadResponse = response.data;
     uploadedVideoUUID.value = uploadResponse.video_id;
 
-    const allFramesArr = [];
+    const allFramesArr: Frame[] = [];
     const duration = uploadedVideoDuration.value || 0;
     for (let i = 1; i <= Math.ceil(duration * framesPerSecond.value); i++) {
       allFramesArr.push({
-        src: `http://localhost:8080/outputs/${uploadedVideoUUID.value}/frames/ffout_${i.toString().padStart(4, '0')}.png`,
+        src: `${BACKEND_URL}/outputs/${uploadedVideoUUID.value}/frames/ffout_thumbnail_${i.toString().padStart(4, '0')}.webp`,
         frameNumber: i,
         time: (i / framesPerSecond.value).toFixed(2),
+        weight: 1.0,
       });
     }
     allFrames.value = allFramesArr;
     adjustShownTimelineImages(sliderValue.value, 1);
   } catch (error) {
     console.error('Error uploading video:', error);
+  }
+  finally {
+    progressVisible.value = false;
+    uploadProgress.value = 0;
   }
 };
 
@@ -174,7 +222,7 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
 };
 
-const toggleFrameSelection = (frame: { src: string; frameNumber: number; time: string }, event: MouseEvent) => {
+const toggleFrameSelection = (frame: Frame, event: MouseEvent) => {
   const index = selectedFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
 
   if (event.shiftKey && lastSelectedFrame.value !== null) {
@@ -225,15 +273,17 @@ const sendUnselectedFrames = async () => {
       longExposureImageUrl.value = null;
     }
 
-    const frameNumbersToInclude = allFrames.value
-      .filter(frame => !selectedFrames.value.some(selectedFrame => selectedFrame.frameNumber === frame.frameNumber))
-      .map(frame => frame.frameNumber);
-    console.log('Frame Numbers to Include:', frameNumbersToInclude);
 
-    const response = await axios.post(`${BACKEND_URL}/sendFrames`, {
+    const includedFrames: FrameToInclude[] = allFrames.value
+      .filter(frame => !selectedFrames.value.some(selectedFrame => selectedFrame.frameNumber === frame.frameNumber))
+      .map(frame => ({ frame_number: frame.frameNumber, frame_weight: frame.weight }));
+    console.log('Frame Numbers to Include:', includedFrames);
+
+    const payload: CreateLongExposureImageRequest = {
       video_id: uploadedVideoUUID.value,
-      frames_to_include: frameNumbersToInclude,
-    });
+      frames_to_include: includedFrames,
+    };
+    const response: AxiosResponse<string> = await axios.post<CreateLongExposureImageRequest,AxiosResponse<string>>(`${BACKEND_URL}/sendFrames`, payload);
 
     if (response.status === 200) {
       console.log('Response after selecting Frames:', response.data);
@@ -247,6 +297,24 @@ const sendUnselectedFrames = async () => {
   }
 };
 
+const updateFrameWeight = (frame: Frame) => {
+  // Find the frame in the selected frames and update its weight
+  const frameIndex = allFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
+  if (frameIndex !== -1) {
+    allFrames.value[frameIndex].weight = frame.weight;
+    // If the frame weight is 0, add it to the selected frames
+    if (frame.weight === 0) {
+      // Check if the frame is already in the selected frames
+      const selectedFrameIndex = selectedFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
+      if (selectedFrameIndex === -1) {
+        selectedFrames.value.push(frame);
+      }
+    }
+  }
+  // Log the updated frame weight (optional)
+  console.log(`Frame ${frame.frameNumber} weight updated to ${frame.weight}`);
+};
+
 onMounted(() => {
   if (videoPlayer.value) {
     videoPlayer.value.addEventListener('loadedmetadata', () => {
@@ -258,6 +326,22 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.progress {
+  width: 100%;
+  background-color: #f3f3f3;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 24px;
+  background-color: #4caf50;
+  text-align: center;
+  color: white;
+  transition: width 0.3s;
+}
+
+
 body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -319,10 +403,11 @@ button {
   border: none;
   border-radius: 5px;
   cursor: pointer;
+  transition: background-color 0.3s;
 }
 
 button:hover {
-  background-color: #007acc;
+  background-color: #0056b3;
 }
 
 button:active {
@@ -331,56 +416,102 @@ button:active {
 
 .timeline-container {
   margin-top: 20px;
-  
 }
 
 .timeline-buttons {
   display: flex;
   justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
   margin-bottom: 10px;
 }
 
 .timeline {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 10px;
 }
 
+/* Individual timeline items */
 .timeline-item {
   position: relative;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0px;
+  background-color: #f9f9f9;
+  transition: box-shadow 0.2s, transform 0.2s;
 }
 
+/* Images inside timeline items */
 .timeline-item img {
   width: 100%;
   height: auto;
   object-fit: cover;
   border: 2px solid transparent;
-  transition: border-color 0.2s;
+  /* Set initial border to reserve space */
+  transition: border-color 0.2s, transform 0.2s;
+  box-sizing: border-box;
+  /* Ensure border is included in the element's width and height */
 }
 
+/* Hover effect on images */
 .timeline-item:hover img {
   border-color: dodgerblue;
 }
 
+/* Selected state for images */
 .timeline-item.selected img {
   border-color: red;
 }
 
+/* Weight input fields */
+.timeline-item input[type="number"] {
+  margin-top: 5px;
+  width: 60px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 2px;
+  text-align: center;
+  background-color: #fff;
+  font-weight: bold;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s;
+  z-index: 2;
+  /* Ensure it is above other elements */
+  position: relative;
+}
+
+.timeline-item input[type="number"]:focus {
+  border-color: dodgerblue;
+}
+
+/* Labels for weight input fields */
+.timeline-item label {
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 5px;
+  color: #000000;
+  display: block;
+  text-align: center;
+}
+
+/* Tooltips for timeline items */
 .timeline-item .tooltip {
   position: absolute;
   bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
   padding: 5px;
   background-color: black;
   color: white;
   border-radius: 3px;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.3s;
   white-space: nowrap;
+  pointer-events: none;
 }
 
+/* Tooltip visibility on hover */
 .timeline-item:hover .tooltip {
   opacity: 1;
 }

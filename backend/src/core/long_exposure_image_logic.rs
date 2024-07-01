@@ -1,12 +1,12 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-
+use std::thread::current;
 use chrono::Utc;
-use image::{ImageBuffer, ImageError, ImageResult, Rgba, RgbaImage};
+use image::{ImageBuffer, ImageError, ImageResult, Pixel, Rgba, RgbaImage};
 use image::error::{ParameterError, ParameterErrorKind};
 use rayon::prelude::*;
 use tracing::{debug, error, info};
-
+use crate::routes::sendFrames::{FrameData};
 use crate::utils::convert_image_path_to_serving_url;
 
 fn generate_timestamped_path(base_path: &PathBuf, base_name: &str, extension: &str) -> PathBuf {
@@ -16,88 +16,79 @@ fn generate_timestamped_path(base_path: &PathBuf, base_name: &str, extension: &s
 
 pub async fn create_long_exposure_image(
     frames_dir_path: PathBuf,
-    selected_images: Vec<usize>,
+    frames_data: Vec<FrameData>,
 ) -> Result<String, String> {
-    #[cfg(dbg)]
-    let time_measurement = chrono::Utc::now();
 
-    info!("Frames dir path is {:?}", frames_dir_path);
-    let mut image_paths_iter = tokio::fs::read_dir(&frames_dir_path)
-        .await
-        .expect("Should have read");
-    let mut image_paths: Vec<_> = vec![];
-    while let Ok(Some(entry)) = image_paths_iter.next_entry().await {
-        let frame_file_name = entry.file_name().to_string_lossy().to_string();
+    let start_time = chrono::Utc::now();
 
-        let frame_file_name_without_extension = Path::new(&frame_file_name)
-            .file_stem()
-            .and_then(OsStr::to_str)
-            .expect("Conversion from frame_file_name to str failed")
-            .to_string();
+    let mut image_buffers: Vec<(RgbaImage, f32)> = vec![];
+    for frame in frames_data.iter() {
+        let frame_file_name = format!("ffout_{:04}.png", frame.frame_number);
+        let frame_path = frames_dir_path.join(frame_file_name);
+        let img = image::open(&frame_path).expect("Should have opened image").to_rgba8();
+        image_buffers.push((img, frame.frame_weight));
+    }
 
-        debug!("File name of frame is {frame_file_name_without_extension}");
-        let frame_number_as_string: String = frame_file_name_without_extension
-            .split("ffout_")
-            .last()
-            .expect("Couldn't find String 'ffout' in filename of frame")
-            .replace(r"0+", "")
-            .to_string();
-        debug!("Frame Number as String is : {}", frame_number_as_string);
-        let frame_number: usize = frame_number_as_string
-            .parse()
-            .expect("Some error occured parsing Frame Number From String to usize");
-        if selected_images.contains(&frame_number) {
-            debug!("Frame {} was included", frame_number);
-            image_paths.push(entry.path())
+    let file_processing_end_time = chrono::Utc::now();
+
+    if image_buffers.is_empty() {
+        return Err("No images were chosen".to_string());
+    }
+
+    let total_weight: f32 = image_buffers.iter().map(|(_, weight)| weight).sum();
+    let (width, height) = image_buffers[0].0.dimensions();
+    let mut long_exposure_img: RgbaImage = ImageBuffer::new(width, height);
+
+    // Create a buffer to hold the blended pixels
+    let blended_pixels: Vec<Vec<(f32, f32, f32, f32)>> = image_buffers.par_iter().map(|(img, weight)| {
+        let mut temp_blended = vec![(0.0, 0.0, 0.0, 0.0); (width * height) as usize];
+        for (x, y, pixel) in img.enumerate_pixels() {
+            let index = (y * width + x) as usize;
+            let Rgba(new_data) = *pixel;
+            temp_blended[index].0 += new_data[0] as f32 * weight;
+            temp_blended[index].1 += new_data[1] as f32 * weight;
+            temp_blended[index].2 += new_data[2] as f32 * weight;
+            temp_blended[index].3 += new_data[3] as f32 * weight;
+        }
+        temp_blended
+    }).collect();
+
+    // Combine the intermediate results into the final blended image
+    let mut final_blended = vec![(0.0, 0.0, 0.0, 0.0); (width * height) as usize];
+    for temp_blended in blended_pixels {
+        for (index, pixel) in temp_blended.into_iter().enumerate() {
+            final_blended[index].0 += pixel.0;
+            final_blended[index].1 += pixel.1;
+            final_blended[index].2 += pixel.2;
+            final_blended[index].3 += pixel.3;
         }
     }
 
-    // Sortieren Sie die Pfade, falls diese nicht in der richtigen Reihenfolge sind.
-    //image_paths.sort();
-
-    let image_buffers: Vec<RgbaImage> = image_paths
-        .par_iter()
-        .filter_map(|path| image::open(path).ok())
-        .map(|img| img.to_rgba8())
-        .collect();
-    #[cfg(dbg)]
-    let end_time = chrono::Utc::now();
-
-    if image_buffers.is_empty() {
-        error!("Could not create long exposure image because no images/frames were chosen");
-        return Err("No images were chosen".to_string());
+    // Normalize the pixel values and apply them back to the original image
+    for (index, pixel) in final_blended.into_iter().enumerate() {
+        let x = (index as u32) % width;
+        let y = (index as u32) / width;
+        long_exposure_img.put_pixel(x, y, Rgba([
+            (pixel.0 / total_weight).min(255.0) as u8,
+            (pixel.1 / total_weight).min(255.0) as u8,
+            (pixel.2 / total_weight).min(255.0) as u8,
+            (pixel.3 / total_weight).min(255.0) as u8,
+        ]));
     }
-    // Nehmen wir an, alle Bilder haben die gleiche Größe
-    let (width, height) = image_buffers[0].dimensions();
-    let mut long_exposure_img: RgbaImage = ImageBuffer::new(width, height);
 
-    long_exposure_img
-        .enumerate_pixels_mut()
-        .par_bridge()
-        .for_each(|(x, y, pixel)| {
-            let r: Rgba<u8> = image_buffers
-                .iter()
-                .fold(Rgba([0, 0, 0, 255]), |max_pixel, img| {
-                    let current_pixel = img.get_pixel(x, y);
-                    blend_max(&max_pixel, current_pixel)
-                });
-            pixel.0 = r.0
-        });
-
-    #[cfg(dbg)]
     {
-        let processing_time = chrono::Utc::now();
-        println!(
+        let image_calculation_time = chrono::Utc::now();
+        debug!(
             "File Reading = {}",
-            (end_time - time_measurement).num_milliseconds()
+            (file_processing_end_time - start_time).num_milliseconds()
         );
-        println!(
-            "File Processing = {}",
-            (processing_time - end_time).num_milliseconds()
+        debug!(
+            "Long Exposure Image Calculations= {}",
+            (image_calculation_time - file_processing_end_time).num_milliseconds()
         );
-        println!(
+        debug!(
             "Total Time = {}",
-            (processing_time - time_measurement).num_milliseconds()
+            (image_calculation_time - start_time).num_milliseconds()
         );
     }
     let long_exposure_image_file_path =
@@ -115,6 +106,15 @@ fn blend_max(pixel1: &Rgba<u8>, pixel2: &Rgba<u8>) -> Rgba<u8> {
         pixel1[0].max(pixel2[0]),
         pixel1[1].max(pixel2[1]),
         pixel1[2].max(pixel2[2]),
+        255, // Alpha Kanal beibehalten
+    ])
+}
+
+fn blend_average(pixel1: &Rgba<u8>, pixel2: &Rgba<u8>) -> Rgba<u8> {
+    Rgba([
+        (pixel1[0] as u16 + pixel2[0] as u16 / 2) as u8,
+        (pixel1[1] as u16 + pixel2[1] as u16 / 2) as u8,
+        (pixel1[2] as u16 + pixel2[2] as u16 / 2) as u8,
         255, // Alpha Kanal beibehalten
     ])
 }

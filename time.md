@@ -1,24 +1,34 @@
-## Time Tracking - Issue 1
+## Zeiterfassung - Issue 1: Video-Upload und erstes Bildverarbeitung
 
-| Task                                                     | Time |
-| -------------------------------------------------------- | ---- |
-| Research how Files uploads are handled                   | 2.5h |
-| Evaluating Language Options                              | 1h   |
-| Coding Upload Functionality                              | 2.5h |
-| Coding FFmpeg Call                                       | 1h   |
-| Researching Possible Image processing libraries for Rust | 2h   |
-| Coding different Image Long Time Exposure Algorithms     | 6h   |
-| Add parallel processing for more speed                   | 1h   |
-| Total                                                    | 16h  |
+| Aufgabe                                                         | Zeit |
+| --------------------------------------------------------------- | ---- |
+| Recherche, wie Dateiuploads gehandhabt werden                   | 2,5h |
+| Bewertung von Sprachoptionen                                    | 1h   |
+| Codierung der Upload-Funktionalität                             | 2,5h |
+| Codierung des FFmpeg-Aufrufs                                    | 1h   |
+| Recherche möglicher Bildverarbeitungsbibliotheken für Rust      | 2h   |
+| Codierung verschiedener Algorithmen für Langzeitbelichtung      | 6h   |
+| Hinzufügen von paralleler Verarbeitung für mehr Geschwindigkeit | 1h   |
+| Gesamt                                                          | 16h  |
 
-## Time Tracking - Issue 2 
+## Zeiterfassung - Issue 2: Bilder abwählen, um sie vom Endergebnis auszuschließen
 
-| Task                                                        | Time |
-| ----------------------------------------------------------- | ---- |
-| Research on how to display Videos in html                   | 2h   |
-| Evaluating Frontend Framework                               | 0.5h |
-| Coding Upload Functionality in Frontend                     | 1.5h |
-| Coding Backend Functionality for using only selected images | 1.5h |
-| Coding Timeline                                             | 9h   |
-| Trying to make things look pleasing to the eye              | 1.5h |
-| Total                                                       | 16h  |
+| Aufgabe                                                                     | Zeit |
+| --------------------------------------------------------------------------- | ---- |
+| Recherche, wie Videos in HTML angezeigt werden                              | 2h   |
+| Bewertung von Frontend-Frameworks                                           | 0,5h |
+| Codierung der Upload-Funktionalität im Frontend                             | 1,5h |
+| Codierung der Backend-Funktionalität zur Verwendung nur ausgewählter Bilder | 1,5h |
+| Codierung der Zeitleiste                                                    | 9h   |
+| Versuch, Dinge ansprechend aussehen zu lassen                               | 1,5h |
+| Gesamt                                                                      | 16h  |
+
+## Zeiterfassung - Issue 3: Schlüsselbilder auswählen
+
+| Aufgabe                                                                               | Zeit |
+| ------------------------------------------------------------------------------------- | ---- |
+| Recherche, wie der "Durchschnitt" blend mode funktioniert und was frame stacking ist  | 3h   |
+| Code Refactor und Erstellung von Thumbnails                                           | 1h   |
+| Implementierung im Frontend für das mitgeben einer Gewichtung bei Bildern             | 2h   |
+| Implementierung im Backend für das Blenden von den Images anhand von dessen Gewichten | 2h   |
+| Gesamt                                                                                | 8h   |
