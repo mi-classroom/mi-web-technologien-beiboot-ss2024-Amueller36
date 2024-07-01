@@ -95,17 +95,30 @@ async fn upload_file(mut payload: Multipart) -> HttpResponse {
                 .to_str()
                 .unwrap()
                 .to_string();
+            let webp_output_path = cut_images_save_dir_path
+                .join("ffout_thumbnail_%4d.webp")
+                .to_str()
+                .unwrap()
+                .to_string();
             Command::new("ffmpeg")
                 .args([
                     "-i",
-                    uploaded_movie_save_file_path.to_str().unwrap(),
-                    "-threads",
-                    "4",
-                    "-vf",
-                    &format!("scale={}", scale),
-                    "-r",
-                    &fps.to_string(),
+                    uploaded_movie_save_file_path.to_str().unwrap(),  // Input file path
+                    "-threads", "0",                                  // Use Optimal amount of threads
+                    "-vf", &format!("scale={}", scale),               // Scaling option
+                    "-r",  &fps.to_string(),                          // Frames per second
                     &ffmpeg_output_path,
+
+                    // Output for WebP thumbnails
+                    "-vf", "scale=720:-1",                            // Scaling for Thumbnail WebP Images
+                    "-r", &fps.to_string(),                           // FPS for WebP
+                    "-c:v", "libwebp",                                // Codec for WebP
+                    "-lossless", "0",                                 // 0 for lossy, 1 for lossless
+                    "-compression_level", "6",                        // Compression level (0 to 6(highest))
+                    "-q:v", "25",                                     // Quality level (0(worst quality) to 100(best quality))
+                    "-preset", "default",                             // Encoding preset (default balances compression quality and speed of the encoding)
+                    "-an",                                            // No audio
+                    &webp_output_path,                                // Output path for WebP
                 ])
                 .output()
                 .expect("failed to execute ffmpeg");

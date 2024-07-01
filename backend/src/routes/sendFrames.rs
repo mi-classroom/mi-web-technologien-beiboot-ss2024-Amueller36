@@ -9,29 +9,32 @@ use uuid::Uuid;
 use crate::core::long_exposure_image_logic::create_long_exposure_image;
 use crate::utils::get_output_dir;
 
+#[derive(Deserialize, Debug, PartialEq)]
+pub struct FrameData {
+    pub frame_number: usize,
+    pub frame_weight: f32,
+}
 #[derive(Deserialize)]
 struct CreateLongExposureImageRequest {
     video_id: String,
-    frames_to_include: Vec<usize>,
+    frames_to_include: Vec<FrameData>,
 }
 
 #[post("/sendFrames")]
 pub async fn create_long_exposure_image_request(
-    selected_frames: web::Json<CreateLongExposureImageRequest>,
+    create_long_exposure_image_request: web::Json<CreateLongExposureImageRequest>,
 ) -> HttpResponse {
-    let img_result = block(|| {
+    let image_request = create_long_exposure_image_request.into_inner();
+    
+    let img_result = block(move || {
         let output_dir = get_output_dir();
-        let selected_frames = selected_frames.into_inner();
+        let path_to_cut_images = output_dir.join(format!("{}/frames/", image_request.video_id));
 
-        let frames_to_include = selected_frames.frames_to_include.clone();
-        let video_id = selected_frames.video_id.clone();
-        let path_to_cut_images = output_dir.join(format!("{}/frames/", video_id));
-
-        debug!("Frames to Include sind : {:?}", frames_to_include);
-        create_long_exposure_image(path_to_cut_images, frames_to_include)
+        debug!("Frames to include are: {:?}", image_request.frames_to_include);
+        create_long_exposure_image(path_to_cut_images, image_request.frames_to_include)
     })
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     match img_result.await {
         Ok(path_to_long_exposure_img) => HttpResponse::Ok().body(path_to_long_exposure_img),
@@ -43,3 +46,4 @@ pub async fn create_long_exposure_image_request(
         }
     }
 }
+
