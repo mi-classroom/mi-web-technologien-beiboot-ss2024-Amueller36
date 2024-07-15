@@ -32,3 +32,12 @@
 | Implementierung im Frontend für das mitgeben einer Gewichtung bei Bildern             | 2h   |
 | Implementierung im Backend für das Blenden von den Images anhand von dessen Gewichten | 2h   |
 | Gesamt                                                                                | 8h   |
+
+## Zeiterfassung - Issue 4: Review Prozess einrichten
+| Aufgabe                          | Zeit  |
+| -------------------------------- | ----- |
+| README anpassen                  | 0.25h |
+| Dockerfiles schreiben und testen | 2h    |
+| Review Prozess verschriftlichen  | 3h    |
+| Gesamt                           | 5.25h |
+
