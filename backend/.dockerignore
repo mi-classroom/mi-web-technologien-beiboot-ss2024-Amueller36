@@ -1,8 +1,0 @@
-target
-
-# Ignore IDE and tool specific files
-.idea
-*.swp
-
-# Ignore media files
-media
