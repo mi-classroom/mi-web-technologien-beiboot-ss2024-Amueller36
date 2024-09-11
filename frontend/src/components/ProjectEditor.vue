@@ -69,39 +69,10 @@
 
 
 <script setup lang="ts">
-import {ref, onMounted, computed, type Ref} from 'vue';
-import axios from 'axios';
-import type {AxiosResponse} from 'axios';
+import {ref, onMounted, computed, watch, type Ref} from 'vue';
+import type {ApiResponse, UploadResponse, ProjectDataResponse, CreateLongExposureImageRequest,FrameToInclude, Frame } from '@/types';
+import { api, uploadFile, endpoints, getBackendUrlByEndpoint} from "@/api"
 import VueSlider from 'vue-3-slider-component';
-
-
-interface Frame {
-  src: string;
-  frameNumber: number;
-  time: string;
-  weight: number;
-}
-
-interface FrameToInclude {
-  frame_number: number;
-  frame_weight: number;
-}
-
-interface CreateLongExposureImageRequest {
-  video_id: string;
-  frames_to_include: FrameToInclude[];
-}
-
-interface ProjectDataResponse {
-  fps: number;
-  scale: string;
-  video_file_extension: string;
-  latest_long_exposure_image_name: string | null;
-}
-
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-console.log('Backend URL:', BACKEND_URL);
 
 const props = defineProps<{
   id: string
@@ -143,11 +114,6 @@ const progressVisible: Ref<boolean> = ref(false);
 // Long Exposure Image
 const longExposureImageUrl: Ref<string | null> = ref(null);
 
-interface UploadResponse {
-  message: string;
-  video_id: string;
-}
-
 
 const displayVideoInPlayer = (event: Event) => {
   const target = event.target as HTMLInputElement;
@@ -183,6 +149,7 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
   }
   progressVisible.value = true;
 
+  
   const formData = new FormData();
   if (uploadedVideoUUID.value) {
     console.log("Video id is :" + uploadedVideoUUID.value)
@@ -194,29 +161,25 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
   if (!scale.value) {
     scale.value = '1600:-1'
   }
+
   formData.append('scale', scale.value);
   formData.append('fps', framesPerSecond.value.toString());
-
+  
   try {
-    const response = await axios.post(`${BACKEND_URL}/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: (progressEvent) => {
-        if (progressEvent.lengthComputable) {
-          uploadProgress.value = Math.round((progressEvent.loaded / (progressEvent.total ?? 100)) * 100);
-        }
-      }
+    const response : ApiResponse<UploadResponse>= await uploadFile(endpoints.upload, formData, (progress) => {
+      uploadProgress.value = progress;
     });
-    console.log("Should have uploaded the video now.");
-    const uploadResponse: UploadResponse = response.data;
-    uploadedVideoUUID.value = uploadResponse.video_id;
+    const uploadResponse : UploadResponse = response.data;
+    const status : number = response.status;
+    console.log(uploadResponse.message + `status: ${status}`);
+
+    uploadedVideoUUID.value = uploadResponse.video_id
 
     const allFramesArr: Frame[] = [];
     const duration = uploadedVideoDuration.value || 0;
     for (let i = 1; i <= Math.ceil(duration * framesPerSecond.value); i++) {
       allFramesArr.push({
-        src: `${BACKEND_URL}/outputs/${uploadedVideoUUID.value}/frames/ffout_thumbnail_${i.toString().padStart(4, '0')}.webp`,
+        src: getBackendUrlByEndpoint(endpoints.frameThumbnail(uploadedVideoUUID.value, i)),
         frameNumber: i,
         time: (i / framesPerSecond.value).toFixed(2),
         weight: 1.0,
@@ -319,14 +282,14 @@ const sendUnselectedFrames = async () => {
       video_id: uploadedVideoUUID.value,
       frames_to_include: includedFrames,
     };
-    const response: AxiosResponse<string> = await axios.post<CreateLongExposureImageRequest, AxiosResponse<string>>(`${BACKEND_URL}/createLongExposureImage`, payload);
+    const { data, status } : { data: string; status: number } = await api.post<string>(endpoints.createLongExposureImage, payload);
 
-    if (response.status === 200) {
-      console.log('Response after selecting Frames:', response.data);
-      longExposureImageUrl.value = response.data;
+    if (status === 200) {
+      console.log('Response after selecting Frames:', data);
+      longExposureImageUrl.value = data;
       showTimeline.value = false;
     } else {
-      console.error('The Backend did not respond with 200, after sending it the selected frames.', selectedFrames.value, response.data);
+      console.error('The Backend did not respond with 200, after sending it the selected frames.',selectedFrames.value, data);
     }
   } catch (error) {
     console.error('Error sending selected frames:', error);
@@ -353,12 +316,12 @@ const updateFrameWeight = (frame: Frame) => {
 const loadProjectData = async () => {
   if (!uploadedVideoUUID.value) return;
   try {
-    const response = await axios.get(`${BACKEND_URL}/projects/${uploadedVideoUUID.value}`);
-    if (response.status != 200) {
-      console.error('Error fetching projectData:', response);
+    const {data : projectData, status} : ApiResponse<ProjectDataResponse> = await api.get<ProjectDataResponse>(endpoints.specificProject(uploadedVideoUUID.value));
+    if (status != 200) {
+      console.error('Error fetching projectData:', { status, data: projectData });
       return;
     }
-    const projectData: ProjectDataResponse = response.data;
+    console.log("Data ", projectData);
 
     scale.value = projectData.scale;
     framesPerSecond.value = projectData.fps;
@@ -366,19 +329,18 @@ const loadProjectData = async () => {
     // If there's a long exposure image, show it
     if (projectData.latest_long_exposure_image_name) {
       longExposureImageUrl.value = projectData.latest_long_exposure_image_name;
-      showTimeline.value = false
+      showTimeline.value = false;
     }
 
     // Load Video from Backend
-
-    videoUrlOnServer.value = `${BACKEND_URL}/uploads/${uploadedVideoUUID.value}.${projectData.video_file_extension}`;
+    videoUrlOnServer.value = getBackendUrlByEndpoint(endpoints.videoFile(uploadedVideoUUID.value, projectData.video_file_extension));
 
   } catch (error) {
     console.error('Error loading project data:', error);
   }
 };
 
-const loadTimelineThumbnails = async () => {
+const loadTimelineThumbnails = () => {
   if (!uploadedVideoUUID.value || !framesPerSecond.value) {
     return
   }
@@ -388,7 +350,7 @@ const loadTimelineThumbnails = async () => {
 
   for (let i = 1; i <= Math.ceil(duration * framesPerSecond.value); i++) {
     allFramesArr.push({
-      src: `${BACKEND_URL}/outputs/${uploadedVideoUUID.value}/frames/ffout_thumbnail_${i.toString().padStart(4, '0')}.webp`,
+      src: getBackendUrlByEndpoint(endpoints.frameThumbnail(uploadedVideoUUID.value, i)),
       frameNumber: i,
       time: (i / framesPerSecond.value).toFixed(2),
       weight: 1.0,
@@ -400,13 +362,20 @@ const loadTimelineThumbnails = async () => {
 
 onMounted(() => {
   loadProjectData()
-  if (videoPlayer?.value) {
-    videoPlayer.value.addEventListener('loadedmetadata', () => {
-      uploadedVideoDuration.value = Math.floor(videoPlayer?.value?.duration || 0);
+  // if (videoPlayer?.value) {
+  //   videoPlayer.value.addEventListener('loadedmetadata', () => {
+  //     uploadedVideoDuration.value = Math.floor(videoPlayer?.value?.duration || 0);
 
-      sliderValue.value = [0, uploadedVideoDuration.value || 0];
-      loadTimelineThumbnails()
-    });
+  //     sliderValue.value = [0, uploadedVideoDuration.value || 0];
+  //     loadTimelineThumbnails()
+  //   });
+  // }
+});
+
+watch(() => uploadedVideoDuration.value, (newDuration) => {
+  if (newDuration > 0) {
+    sliderValue.value = [0, newDuration];
+    loadTimelineThumbnails();
   }
 });
 </script>

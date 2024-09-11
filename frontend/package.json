@@ -13,10 +13,9 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "axios": "^1.7.2",
     "dotenv": "^16.4.5",
     "vue": "^3.4.21",
-    "vue-3-slider-component": "^0.1.4",
+    "vue-3-slider-component": "1.0.1",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {

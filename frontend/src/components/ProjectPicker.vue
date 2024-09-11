@@ -10,12 +10,12 @@
 
     <!-- Display projects if available -->
     <div class="projects-grid">
-      <div v-for="project in projects" :key="project.id" class="project-card">
+      <div v-for="project in projectsArr" :key="project.id" class="project-card">
         <div class="delete-button" @click.stop="deleteProject(project.id)">
-          <delete-icon/>
+          <delete-icon />
         </div>
         <router-link :to="{ name: 'ProjectEditor', params: { id: project.id } }" class="project-link">
-          <img :src="project.thumbnail_path" loading="lazy" :alt="'Project ' + project.id" class="project-thumbnail"/>
+          <img :src="project.thumbnail_path" loading="lazy" :alt="'Project ' + project.id" class="project-thumbnail" />
           <h3 class="project-title">{{ project.id }}</h3>
         </router-link>
       </div>
@@ -25,30 +25,40 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import axios from "axios";
 import DeleteIcon from './DeleteIcon.vue';
+import { api, endpoints } from '@/api'
+import type {ProjectDetails, ProjectsResponse} from '@/types'
 
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-console.log('Backend URL:', BACKEND_URL);
 
-let projects = ref<Array<ProjectResponse>>([]);
+
+let projectsArr = ref<Array<ProjectDetails>>([]);
 
 const getProjects = async () => {
   try {
-    const res = await axios.get(BACKEND_URL + "/projects");
-    projects.value = res.data.projects;
-    console.log('Projects:', projects.value);
+    const { data, status }: { data: ProjectsResponse; status: number } = await api.get<ProjectsResponse>(endpoints.projects);
+
+    if (status !== 200) {
+      console.error(`Error fetching projects: Received status ${status}`);
+      return;
+    }
+
+    const projects: Array<ProjectDetails> = data.projects;
+    projectsArr.value = projects;
+
   } catch (error) {
     console.error('Error fetching projects:', error);
   }
-}
+};
 
 const deleteProject = async (projectId: string) => {
   try {
-    projects.value = projects.value.filter(project => project.id !== projectId);
-    await axios.delete(`${BACKEND_URL}/projects/${projectId}`);
-    console.log(`Project ${projectId} deleted successfully`);
+    projectsArr.value = projectsArr.value.filter(project => project.id !== projectId);
+    const {data, status} = await api.delete<string>(endpoints.specificProject(projectId));
+    if (status != 200){
+      console.error(`An error occured on Server Side when trying to delete project ${projectId}. Status : ${status}`);
+    } 
+    console.log(data);
   } catch (error) {
     console.error(`Error deleting project ${projectId}:`, error);
     // If the delete request fails, add the project back to the list
@@ -60,10 +70,7 @@ onMounted(() => {
   getProjects();
 });
 
-interface ProjectResponse {
-  id: string,
-  thumbnail_path: string,
-}
+
 </script>
 <style scoped>
 body {
@@ -85,7 +92,8 @@ body {
 }
 
 /* Centered text for titles and messages */
-.title, .new-projects {
+.title,
+.new-projects {
   text-align: center;
 }
 
