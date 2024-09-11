@@ -181,10 +181,6 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
     console.error('Missing required fields');
     return;
   }
-  // if (!uploadedVideoUUID.value) {
-  //
-  //   resetTimelineRefsToDefault();
-  // }
   progressVisible.value = true;
 
   const formData = new FormData();
