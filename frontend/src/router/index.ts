@@ -1,6 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import ProjectEditor from '@/components/ProjectEditor.vue'
-import ProjectPicker from "@/components/ProjectPicker.vue";
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -11,17 +9,17 @@ const router = createRouter({
     {
       path: '/projects/new',
       name: 'NewProject',
-      component: ProjectEditor
+      component: import('@/components/ProjectEditor.vue')
     },
     {
       path: '/projects',
       name: 'Projects',
-      component: ProjectPicker
+      component: import('@/components/ProjectPicker.vue')
     },
     {
       path: '/projects/:id',
       name: 'ProjectEditor',
-      component: ProjectEditor,
+      component: import('@/components/ProjectEditor.vue'),
       props: true
     }
   ]
