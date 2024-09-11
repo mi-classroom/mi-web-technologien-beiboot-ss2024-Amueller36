@@ -27,6 +27,8 @@ RUN yarn install --frozen-lockfile --production --network-concurrency 10 && yarn
 # Use the latest Nginx image for the production stage
 FROM nginx:alpine AS prod
 
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copy production node_modules and built assets from the build stage
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build-stage /app/dist /usr/share/nginx/html
