@@ -12,10 +12,7 @@
     <div class="projects-grid">
       <div v-for="project in projects" :key="project.id" class="project-card">
         <div class="delete-button" @click.stop="deleteProject(project.id)">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" width="18px" height="18px">
-            <path d="M0 0h24v24H0z" fill="none"/>
-            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-          </svg>
+          <delete-icon/>
         </div>
         <router-link :to="{ name: 'ProjectEditor', params: { id: project.id } }" class="project-link">
           <img :src="project.thumbnail_path" loading="lazy" :alt="'Project ' + project.id" class="project-thumbnail"/>
@@ -29,6 +26,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import axios from "axios";
+import DeleteIcon from './DeleteIcon.vue';
+
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 console.log('Backend URL:', BACKEND_URL);
