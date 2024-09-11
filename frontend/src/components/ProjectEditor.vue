@@ -1,25 +1,32 @@
 <template>
+
+  <div>
+    <router-link :to="{ name: 'Projects' }" class="back-button">
+      ← Back to Project Picker
+    </router-link>
+  </div>
+
   <div>
     <form @submit.prevent="uploadVideoScaleAndCutIntoFrames">
-      <input type="file" @change="displayVideoInPlayer" accept="video/*" required />
-      <input type="text" v-model="scale" placeholder="Scale (default, 1600:-1)" />
+      <input type="file" @change="displayVideoInPlayer" accept="video/*" :required="!uploadedVideoUUID"/>
+      <input type="text" v-model="scale" placeholder="Scale (default, 1600:-1)"/>
       <input type="number" v-model.number="framesPerSecond" :min="1" :max="60" placeholder="Frames per Second (f.e. 24)"
-        required />
-      <button type="submit">Upload</button>
+             required/>
+      <button type="submit">{{ uploadedVideoUUID ? 'Create New Frames' : 'Create New Project' }}</button>
       <div v-if="progressVisible" class="progress">
         <div class="progress-bar" :style="{ width: uploadProgress + '%' }">{{ uploadProgress }}%</div>
-        <!-- <progress :value="uploadProgress" max="100"></progress>
-        <span>{{ uploadProgress }}%</span> -->
       </div>
-      <p>Uploaded Video ID: {{ uploadedVideoUUID }}</p>
-    </form>
-    <video ref="videoPlayer" :src="usersLocalPathToUploadedVideo" controls></video>
+      <p>Uploaded Video ID:
+        <span v-if="uploadedVideoUUID">{{ uploadedVideoUUID }}</span>
+        <span v-else>Will be set after uploading the video</span>
+      </p></form>
+    <video ref="videoPlayer" :src="videoSource" controls></video>
 
     <div class="time-range">
       Time frame: <span>{{ formatTime(0) }} - {{ formatTime(uploadedVideoDuration) }}</span>
     </div>
     <VueSlider v-model="sliderValue" :min="0" :max="uploadedVideoDuration" :tooltip="'always'"
-      @change="adjustShownTimelineImages"></VueSlider>
+               @change="adjustShownTimelineImages"></VueSlider>
     <p>Slider Value {{ sliderValue }}</p>
     <button v-if="videoWasCutIntoFrames" @click="showTimeline = !showTimeline">
       {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
@@ -28,18 +35,18 @@
       <div class="timeline-buttons">
         <button @click="unselectAllFrames">Unselect All Frames</button>
         <button @click="sendUnselectedFrames">Send Unselected Frames for Image generation</button>
-
       </div>
 
       <div class="timeline">
         <div v-for="frame in extractedFrames" :key="frame.frameNumber"
-          :class="['timeline-item', { selected: isFrameSelected(frame) }]" @click="toggleFrameSelection(frame, $event)">
-          <img :src="frame.src" loading="lazy" :alt="'Frame ' + frame.frameNumber" />
+             :class="['timeline-item', { selected: isFrameSelected(frame) }]"
+             @click="toggleFrameSelection(frame, $event)">
+          <img :src="frame.src" loading="lazy" :alt="'Frame ' + frame.frameNumber"/>
           <div class="tooltip">{{ 'Frame: ' + frame.frameNumber + ', Time: ' + frame.time + 's' }}</div>
           <div class="frame-details">
             <label for="weight-{{frame.frameNumber}}">Weight:</label>
             <input type="number" v-model.number="frame.weight" min="0" step="0.1" id="weight-{{frame.frameNumber}}"
-              @input="updateFrameWeight(frame)" @click.stop @mousedown.stop />
+                   @input="updateFrameWeight(frame)" @click.stop @mousedown.stop/>
           </div>
         </div>
       </div>
@@ -55,17 +62,16 @@
       <button v-if="showTimeline" @click="showTimeline = !showTimeline">
         {{ showTimeline ? 'Hide Timeline' : 'Show Timeline' }}
       </button>
-      <img :src="longExposureImageUrl" />
+      <img :src="longExposureImageUrl"/>
     </div>
   </div>
 </template>
 
 
-
 <script setup lang="ts">
-import { ref, onMounted, computed, type Ref } from 'vue';
+import {ref, onMounted, computed, type Ref} from 'vue';
 import axios from 'axios';
-import type { AxiosResponse } from 'axios';
+import type {AxiosResponse} from 'axios';
 import VueSlider from 'vue-3-slider-component';
 
 
@@ -86,14 +92,32 @@ interface CreateLongExposureImageRequest {
   frames_to_include: FrameToInclude[];
 }
 
+interface ProjectDataResponse {
+  fps: number;
+  scale: string;
+  video_file_extension: string;
+  latest_long_exposure_image_name: string | null;
+}
+
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 console.log('Backend URL:', BACKEND_URL);
 
+const props = defineProps<{
+  id: string
+}>();
+
+
+const uploadedVideoUUID: Ref<string | null> = ref(props.id);
+
 const videoPlayer: Ref<HTMLVideoElement | null> = ref(null);
-const videoFile: Ref<File | null> = ref(null);
-const uploadedVideoUUID: Ref<string> = ref('');
+const videoFile: Ref<File | string | Blob | null> = ref(null);
 const usersLocalPathToUploadedVideo: Ref<string> = ref('');
+const videoUrlOnServer: Ref<string> = ref('');
+
+const videoSource = computed(() => {
+  return usersLocalPathToUploadedVideo.value != "" ? usersLocalPathToUploadedVideo.value : videoUrlOnServer.value;
+})
 
 // Video Cut Settings
 const scale: Ref<string> = ref('');
@@ -126,7 +150,6 @@ interface UploadResponse {
 
 
 const displayVideoInPlayer = (event: Event) => {
-  uploadedVideoUUID.value = 'Will be set after uploading the video';
   const target = event.target as HTMLInputElement;
   if (target.files && target.files.length > 0) {
     videoFile.value = target.files[0];
@@ -150,18 +173,31 @@ const resetTimelineRefsToDefault = () => {
   selectedFrames.value = [];
   lastSelectedFrame.value = null;
   longExposureImageUrl.value = null;
+  uploadedVideoUUID.value = null;
 };
 
 const uploadVideoScaleAndCutIntoFrames = async () => {
-  if (!videoFile.value || !framesPerSecond.value) {
+  if ((!videoFile.value && !uploadedVideoUUID.value) || !framesPerSecond.value) {
     console.error('Missing required fields');
     return;
   }
-  resetTimelineRefsToDefault();
+  // if (!uploadedVideoUUID.value) {
+  //
+  //   resetTimelineRefsToDefault();
+  // }
   progressVisible.value = true;
 
   const formData = new FormData();
-  formData.append('video_file', videoFile.value);
+  if (uploadedVideoUUID.value) {
+    console.log("Video id is :" + uploadedVideoUUID.value)
+    formData.append('video_id', uploadedVideoUUID.value)
+  }
+  if (videoFile.value) {
+    formData.append('video_file', videoFile.value);
+  }
+  if (!scale.value) {
+    scale.value = '1600:-1'
+  }
   formData.append('scale', scale.value);
   formData.append('fps', framesPerSecond.value.toString());
 
@@ -191,11 +227,15 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
       });
     }
     allFrames.value = allFramesArr;
-    adjustShownTimelineImages(sliderValue.value, 1);
+    adjustShownTimelineImages(sliderValue.value, 0);
+
+    //Adjust Url
+    const newUrl = `/projects/${uploadedVideoUUID.value}`;
+    history.replaceState(null, '', newUrl);
+
   } catch (error) {
     console.error('Error uploading video:', error);
-  }
-  finally {
+  } finally {
     progressVisible.value = false;
     uploadProgress.value = 0;
   }
@@ -230,8 +270,8 @@ const toggleFrameSelection = (frame: Frame, event: MouseEvent) => {
     const currentFrameIndex = extractedFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
 
     const [start, end] = lastFrameIndex < currentFrameIndex
-      ? [lastFrameIndex, currentFrameIndex]
-      : [currentFrameIndex, lastFrameIndex];
+        ? [lastFrameIndex, currentFrameIndex]
+        : [currentFrameIndex, lastFrameIndex];
 
     const framesToToggle = extractedFrames.value.slice(start, end + 1);
     const allSelected = framesToToggle.every(f => selectedFrames.value.some(sf => sf.frameNumber === f.frameNumber));
@@ -275,15 +315,15 @@ const sendUnselectedFrames = async () => {
 
 
     const includedFrames: FrameToInclude[] = allFrames.value
-      .filter(frame => !selectedFrames.value.some(selectedFrame => selectedFrame.frameNumber === frame.frameNumber))
-      .map(frame => ({ frame_number: frame.frameNumber, frame_weight: frame.weight }));
+        .filter(frame => !selectedFrames.value.some(selectedFrame => selectedFrame.frameNumber === frame.frameNumber))
+        .map(frame => ({frame_number: frame.frameNumber, frame_weight: frame.weight}));
     console.log('Frame Numbers to Include:', includedFrames);
 
     const payload: CreateLongExposureImageRequest = {
       video_id: uploadedVideoUUID.value,
       frames_to_include: includedFrames,
     };
-    const response: AxiosResponse<string> = await axios.post<CreateLongExposureImageRequest,AxiosResponse<string>>(`${BACKEND_URL}/sendFrames`, payload);
+    const response: AxiosResponse<string> = await axios.post<CreateLongExposureImageRequest, AxiosResponse<string>>(`${BACKEND_URL}/createLongExposureImage`, payload);
 
     if (response.status === 200) {
       console.log('Response after selecting Frames:', response.data);
@@ -302,7 +342,7 @@ const updateFrameWeight = (frame: Frame) => {
   const frameIndex = allFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
   if (frameIndex !== -1) {
     allFrames.value[frameIndex].weight = frame.weight;
-    // If the frame weight is 0, add it to the selected frames
+    // If the frame weight is 0, add it to the selected(ignored) frames
     if (frame.weight === 0) {
       // Check if the frame is already in the selected frames
       const selectedFrameIndex = selectedFrames.value.findIndex(f => f.frameNumber === frame.frameNumber);
@@ -311,21 +351,95 @@ const updateFrameWeight = (frame: Frame) => {
       }
     }
   }
-  // Log the updated frame weight (optional)
   console.log(`Frame ${frame.frameNumber} weight updated to ${frame.weight}`);
 };
 
+const loadProjectData = async () => {
+  if (!uploadedVideoUUID.value) return;
+  try {
+    const response = await axios.get(`${BACKEND_URL}/projects/${uploadedVideoUUID.value}`);
+    if (response.status != 200) {
+      console.error('Error fetching projectData:', response);
+      return;
+    }
+    const projectData: ProjectDataResponse = response.data;
+
+    scale.value = projectData.scale;
+    framesPerSecond.value = projectData.fps;
+
+    // If there's a long exposure image, show it
+    if (projectData.latest_long_exposure_image_name) {
+      longExposureImageUrl.value = projectData.latest_long_exposure_image_name;
+      showTimeline.value = false
+    }
+
+    // Load Video from Backend
+
+    videoUrlOnServer.value = `${BACKEND_URL}/uploads/${uploadedVideoUUID.value}.${projectData.video_file_extension}`;
+
+  } catch (error) {
+    console.error('Error loading project data:', error);
+  }
+};
+
+const loadTimelineThumbnails = async () => {
+  if (!uploadedVideoUUID.value || !framesPerSecond.value) {
+    return
+  }
+
+  const allFramesArr: Frame[] = [];
+  const duration = uploadedVideoDuration.value
+
+  for (let i = 1; i <= Math.ceil(duration * framesPerSecond.value); i++) {
+    allFramesArr.push({
+      src: `${BACKEND_URL}/outputs/${uploadedVideoUUID.value}/frames/ffout_thumbnail_${i.toString().padStart(4, '0')}.webp`,
+      frameNumber: i,
+      time: (i / framesPerSecond.value).toFixed(2),
+      weight: 1.0,
+    });
+  }
+  allFrames.value = allFramesArr;
+  adjustShownTimelineImages(sliderValue.value, 0);
+}
+
 onMounted(() => {
-  if (videoPlayer.value) {
+  loadProjectData()
+  if (videoPlayer?.value) {
     videoPlayer.value.addEventListener('loadedmetadata', () => {
-      uploadedVideoDuration.value = Math.floor(videoPlayer.value?.duration || 0);
+      uploadedVideoDuration.value = Math.floor(videoPlayer?.value?.duration || 0);
+
       sliderValue.value = [0, uploadedVideoDuration.value || 0];
+      loadTimelineThumbnails()
     });
   }
 });
 </script>
 
 <style scoped>
+.back-button {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 10px 20px;
+  background-color: dodgerblue;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.back-button:hover {
+  background-color: #0056b3;
+}
+
+.back-button:active {
+  background-color: #005f80;
+}
+
+
 .progress {
   width: 100%;
   background-color: #f3f3f3;
@@ -374,7 +488,6 @@ input[type='file']:focus,
 input[type='text']:focus,
 input[type='number']:focus {
   outline: none;
-  border-color: dodgerblue;
   border: 4px dashed dodgerblue;
 }
 
@@ -392,7 +505,6 @@ video {
   height: auto;
   margin-bottom: 20px;
 }
-
 
 
 /* Button styles */
@@ -439,7 +551,7 @@ button:active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0px;
+  padding: 0;
   background-color: #f9f9f9;
   transition: box-shadow 0.2s, transform 0.2s;
 }

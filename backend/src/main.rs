@@ -33,8 +33,12 @@ async fn main() -> std::io::Result<()> {
             )
             .service(root)
             .service(fs::Files::new("/outputs", output_dir.to_str().unwrap()).show_files_listing())
+            .service(fs::Files::new("/uploads", upload_dir.to_str().unwrap()).show_files_listing())
             .service(routes::upload::upload_file)
-            .service(routes::sendFrames::create_long_exposure_image_request)
+            .service(routes::create_long_exposure_image::create_long_exposure_image_request)
+            .service(routes::projects::get_projects)
+            .service(routes::projects::get_project_metadata)
+            .service(routes::projects::delete_project)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

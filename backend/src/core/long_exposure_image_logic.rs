@@ -6,7 +6,7 @@ use image::{ImageBuffer, ImageError, ImageResult, Pixel, Rgba, RgbaImage};
 use image::error::{ParameterError, ParameterErrorKind};
 use rayon::prelude::*;
 use tracing::{debug, error, info};
-use crate::routes::sendFrames::{FrameData};
+use crate::routes::create_long_exposure_image::{FrameData};
 use crate::utils::convert_image_path_to_serving_url;
 
 fn generate_timestamped_path(base_path: &PathBuf, base_name: &str, extension: &str) -> PathBuf {
@@ -19,7 +19,7 @@ pub async fn create_long_exposure_image(
     frames_data: Vec<FrameData>,
 ) -> Result<String, String> {
 
-    let start_time = chrono::Utc::now();
+    let start_time = Utc::now();
 
     let mut image_buffers: Vec<(RgbaImage, f32)> = vec![];
     for frame in frames_data.iter() {
