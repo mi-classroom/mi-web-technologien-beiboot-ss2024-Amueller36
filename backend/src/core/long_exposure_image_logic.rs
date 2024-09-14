@@ -91,7 +91,7 @@ pub async fn create_long_exposure_image(
                 let brightness_norm = brightness / 255.0; // Normalize to [0,1]
 
                 // Adjust pixel weight using brightness
-                let brightness_weight = brightness_norm.powf(3.5); // You can tweak this value
+                let brightness_weight = brightness_norm.powf(4.5); // You can tweak this value
                 let pixel_weight = frame_weight * alpha * brightness_weight;
 
                 // Accumulate weighted color values

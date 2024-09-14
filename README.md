@@ -1,8 +1,6 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/gQyBcnrC)
-
 # Web Technologien // begleitendes Projekt Sommersemester 2024
 
-Warum ist das cool? Bilder mit Langzeitbelichtung sind gar nicht so einfach zu erstellen, vor allem, wenn man möglichst
+Bilder mit Langzeitbelichtung sind gar nicht so einfach zu erstellen, vor allem, wenn man möglichst
 viel Kontrolle über das Endergebnis haben möchte. In unserem Ansatz, bildet ein Film den Ausgangspunkt. Diesen zerlegen
 wir in Einzelbilder und montieren die Einzelbilder mit verschiedenen Blendmodes zu einem Bild mit
 Langzeitbelichtungseffekt zusammen.
@@ -86,4 +84,7 @@ Der Reviewprozess für das Repository ist in der [review-prozess.md](review-proz
 
 # Zeitaufwand
 Der Zeitaufwand für dieses Projekt ist in der [time.md](time.md) zu finden.
+
+# Ergebnis:
+![Langzeitbelichtungsbild Zug](train_result.png)
 
