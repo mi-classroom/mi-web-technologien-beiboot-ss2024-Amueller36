@@ -20,12 +20,12 @@ export interface FrameToInclude {
 }
 
 export interface CreateLongExposureImageRequest {
-    video_id: string;
     frames_to_include: FrameToInclude[];
 }
 
 export interface ProjectDataResponse {
     fps: number;
+    project_name: string;
     scale: string;
     video_file_extension: string;
     latest_long_exposure_image_name: string | null;
@@ -44,5 +44,6 @@ export interface ProjectsResponse {
 
 export interface ProjectDetails {
     id: string,
+    project_name: string,
     thumbnail_path: string,
 }

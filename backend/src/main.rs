@@ -1,17 +1,15 @@
 use actix_cors::Cors;
 use actix_files as fs;
-use actix_web::{App, HttpResponse, HttpServer};
+use actix_web::{App, HttpServer};
 
 use crate::utils::{create_directory_if_not_created_yet, get_output_dir, get_upload_dir};
 
 mod core;
-mod routes;
+mod controller;
 mod utils;
-
-#[actix_web::get("/")]
-async fn root() -> HttpResponse {
-    HttpResponse::Ok().body("Hello World")
-}
+mod services;
+mod error;
+mod models;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -20,6 +18,7 @@ async fn main() -> std::io::Result<()> {
     create_directory_if_not_created_yet(upload_dir.to_str().unwrap()).await;
     create_directory_if_not_created_yet(output_dir.to_str().unwrap()).await;
 
+    // Logging
     tracing_subscriber::fmt::init();
 
     HttpServer::new(move || {
@@ -31,16 +30,15 @@ async fn main() -> std::io::Result<()> {
                     .allow_any_header()
                     .max_age(3600),
             )
-            .service(root)
             .service(fs::Files::new("/outputs", output_dir.to_str().unwrap()).show_files_listing())
             .service(fs::Files::new("/uploads", upload_dir.to_str().unwrap()).show_files_listing())
-            .service(routes::upload::upload_file)
-            .service(routes::create_long_exposure_image::create_long_exposure_image_request)
-            .service(routes::projects::get_projects)
-            .service(routes::projects::get_project_metadata)
-            .service(routes::projects::delete_project)
+            .service(controller::projects::create_or_update_project)
+            .service(controller::projects::create_long_exposure_image)
+            .service(controller::projects::get_projects)
+            .service(controller::projects::get_project_metadata)
+            .service(controller::projects::delete_project)
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", 8081))?
     .run()
     .await
 }

@@ -8,6 +8,7 @@ dotenv.config()
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/StillMoving/',
   server: {
     port: Number(process.env.VITE_FRONTEND_PORT) || 3000
   },

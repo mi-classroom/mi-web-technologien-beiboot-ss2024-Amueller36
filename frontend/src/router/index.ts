@@ -9,17 +9,17 @@ const router = createRouter({
     {
       path: '/projects/new',
       name: 'NewProject',
-      component: () => import('@/components/ProjectEditor.vue')
+      component: () => import('@/views/ProjectEditor.vue')
     },
     {
       path: '/projects',
       name: 'Projects',
-      component: () => import('@/components/ProjectPicker.vue')
+      component: () => import('@/views/ProjectPicker.vue')
     },
     {
-      path: '/projects/:id',
+      path: '/projects/:projectId',
       name: 'ProjectEditor',
-      component: () => import('@/components/ProjectEditor.vue'),
+      component: () => import('@/views/ProjectEditor.vue'),
       props: true
     }
   ]

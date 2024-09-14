@@ -1,24 +1,18 @@
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-use std::thread::current;
-use chrono::Utc;
-use image::{ImageBuffer, ImageError, ImageResult, Pixel, Rgba, RgbaImage};
-use image::error::{ParameterError, ParameterErrorKind};
-use rayon::prelude::*;
-use tracing::{debug, error, info};
-use crate::routes::create_long_exposure_image::{FrameData};
-use crate::utils::convert_image_path_to_serving_url;
+use std::path::PathBuf;
 
-fn generate_timestamped_path(base_path: &PathBuf, base_name: &str, extension: &str) -> PathBuf {
-    let timestamp = Utc::now().format("%Y%m%d%H%M%S").to_string();
-    base_path.join(format!("{}_{}.{}", base_name, timestamp, extension))
-}
+use image::{ImageBuffer, Rgba, RgbaImage};
+use rayon::prelude::*;
+
+use crate::models::FrameData;
+use crate::utils;
+use crate::utils::convert_image_path_to_serving_url;
 
 pub async fn create_long_exposure_image(
     frames_dir_path: PathBuf,
     frames_data: Vec<FrameData>,
 ) -> Result<String, String> {
 
+    #[cfg(debug)]
     let start_time = Utc::now();
 
     let mut image_buffers: Vec<(RgbaImage, f32)> = vec![];
@@ -29,7 +23,8 @@ pub async fn create_long_exposure_image(
         image_buffers.push((img, frame.frame_weight));
     }
 
-    let file_processing_end_time = chrono::Utc::now();
+    #[cfg(debug)]
+    let file_processing_end_time = Utc::now();
 
     if image_buffers.is_empty() {
         return Err("No images were chosen".to_string());
@@ -76,6 +71,7 @@ pub async fn create_long_exposure_image(
         ]));
     }
 
+    #[cfg(debug)]
     {
         let image_calculation_time = chrono::Utc::now();
         debug!(
@@ -91,8 +87,9 @@ pub async fn create_long_exposure_image(
             (image_calculation_time - start_time).num_milliseconds()
         );
     }
+
     let long_exposure_image_file_path =
-        generate_timestamped_path(&frames_dir_path.join(".."), "long_exposure_image", "png");
+        utils::generate_timestamped_path(&frames_dir_path.join(".."), "long_exposure_image", "png");
     long_exposure_img
         .save(&long_exposure_image_file_path)
         .map_err(|e| e.to_string())?;

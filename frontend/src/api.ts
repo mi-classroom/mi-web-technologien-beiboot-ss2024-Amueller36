@@ -1,7 +1,6 @@
-import {type ApiResponse, type ProjectDataResponse, type UploadResponse } from './types';
+import type {ApiResponse, UploadResponse } from './types';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-
 
 async function apiCall<T>(
     endpoint: string,
@@ -22,12 +21,41 @@ async function apiCall<T>(
         options.body = JSON.stringify(body);
     }
 
-    const response = await fetch(url, options);
-    const data = await response.json();
+    try {
+        const response = await fetch(url, options);
 
-    return { data, status: response.status };
+        // Check if the response status indicates an error
+        if (!response.ok) {
+            // You can customize the error handling based on status codes
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+
+        // Check Content-Type of response
+        const contentType = response.headers.get('Content-Type');
+        let data: T;
+
+        if (contentType?.includes('application/json')) {
+            // If response is JSON, parse it as JSON
+            data = await response.json();
+        } else if (contentType?.includes('text/plain')) {
+            // If response is plain text, parse it as text
+            const textData = await response.text();
+            data = textData as unknown as T;
+        } else {
+            // Handle other response types if needed
+            const fallbackData = await response.text();
+            data = fallbackData as unknown as T;
+        }
+
+        return { data, status: response.status };
+    } catch (error) {
+        // Handle fetch errors or parsing errors
+        // You can create a standardized error response
+        console.error('API call failed:', error);
+        throw error; // Re-throw the error after logging or handling it as needed
+    }
 }
-
 
 export const api = {
     get: <T>(endpoint: string) => apiCall<T>(endpoint),
@@ -73,14 +101,12 @@ export async function uploadFile(endpoint: string, formData: FormData, onProgres
 
 export const endpoints = {
     projects: "/projects",
-    specificProject: (videoId: string) => `/projects/${videoId}`,
-    specificProject: (videoId: string) => `/projects/${videoId}`,
-    upload: '/upload',
-    createLongExposureImage: '/createLongExposureImage',
-    frameThumbnail: (videoId: string, frameNumber: number) => 
-      `/outputs/${videoId}/frames/ffout_thumbnail_${frameNumber.toString().padStart(4, '0')}.webp`,
-    videoFile: (videoId: string, fileExtension: string) => 
-      `/uploads/${videoId}.${fileExtension}`,
+    specificProject: (projectId: string) => `/projects/${projectId}`,
+    createLongExposureImage: (projectId : string) => `/projects/${projectId}/createLongExposureImage`,
+    frameThumbnail: (projectId: string, frameNumber: number) => 
+      `/outputs/${projectId}/frames/ffout_thumbnail_${frameNumber.toString().padStart(4, '0')}.webp`,
+    videoFile: (projectId: string, fileExtension: string) => 
+      `/uploads/${projectId}.${fileExtension}`,
   };
 
 

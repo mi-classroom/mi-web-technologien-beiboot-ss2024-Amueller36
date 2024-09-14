@@ -20,6 +20,6 @@ RUN apk add --no-cache ffmpeg ca-certificates
 
 COPY --from=build-stage /app/target/release/rust-beiboot .
 
-EXPOSE 8080
+EXPOSE 8081
 
 CMD ["./rust-beiboot"]
