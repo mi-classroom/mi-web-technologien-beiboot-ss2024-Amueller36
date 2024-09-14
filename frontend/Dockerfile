@@ -4,8 +4,8 @@ FROM node:alpine3.20 AS build-stage
 WORKDIR /app
 
 # Copy package.json and yarn.lock and install dependencies
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --network-concurrency 10 && yarn cache clean
+COPY package.json .
+RUN yarn install --network-concurrency 10 && yarn cache clean
 
 # Copy the rest of the application code and build the application
 COPY . .
@@ -20,15 +20,15 @@ FROM node:20-bullseye AS prod-deps
 
 WORKDIR /app
 
-# Copy package.json and yarn.lock and install production dependencies
-COPY package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --production --network-concurrency 10 && yarn cache clean
+# Copy package.json
+COPY package.json .
+RUN yarn install --production --network-concurrency 10 && yarn cache clean
 
 # Use the latest Nginx image for the production stage
 FROM nginx:alpine AS prod
 
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 # Copy production node_modules and built assets from the build stage
 COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=build-stage /app/dist /usr/share/nginx/html

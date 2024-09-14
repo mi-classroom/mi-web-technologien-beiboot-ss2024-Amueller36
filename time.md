@@ -49,3 +49,11 @@
 | Backend API Endpoint für Projektübersicht erstellen (GET /projects , GET /projects{id})    | 2h   |
 | Frontend: API Calls an das Backend implementieren um Daten für den Projektbrowser zu haben | 3h   |
 | Gesamt                                                                                     | 8h   |
+
+## Zeiterfassung - Issue 6: Finetuning & Doku & Feedback von Oliver einarbeiten.
+| Aufgabe              | Zeit |
+| -------------------- | ---- |
+| Frontend Refactoring | 10h  |
+| Backend Refactoring  | 4h   |
+| Doku Refactoring     | 2h   |
+| Gesamt               | 16h  |

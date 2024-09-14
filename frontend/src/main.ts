@@ -1,9 +1,9 @@
 import './assets/main.css'
 
-import { createApp } from 'vue'
+import { createApp, type App as VueApp } from 'vue'
 import App from './App.vue'
 import router from './router'
-const app = createApp(App)
+const app : VueApp = createApp(App)
 
 app.use(router)
 

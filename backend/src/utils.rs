@@ -1,16 +1,15 @@
-use std::env;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use actix_web::web::BytesMut;
+use chrono::Utc;
 use futures_util::TryStreamExt;
-use regex::Regex;
 use serde_json::to_string_pretty;
 use tokio::fs;
-use tokio::fs::OpenOptions;
-use tokio::io::AsyncBufReadExt;
 use tracing::trace;
-use crate::routes::projects::ProjectMetadata;
+
+use crate::error::MetadataError;
+use crate::models::ProjectMetadata;
 
 pub async fn read_text_from_field(mut field: actix_multipart::Field) -> String {
     let mut data = BytesMut::new();
@@ -58,7 +57,7 @@ pub async fn create_directory_if_not_created_yet(path: &str) {
     }
 }
 pub async fn convert_image_path_to_serving_url(image_path: &PathBuf) -> String {
-    let domain = env::var("DOMAIN").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let domain = std::env::var("DOMAIN").unwrap_or_else(|_| "http://localhost:8081".to_string());
 
     // Resolve the absolute path and normalize it
     let absolute_path = fs::canonicalize(image_path).await.unwrap();
@@ -75,14 +74,25 @@ pub async fn convert_image_path_to_serving_url(image_path: &PathBuf) -> String {
     format!("{}/{}", domain, final_path)
 }
 
-pub fn save_metadata(metadata: &ProjectMetadata, metadata_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+
+pub async fn read_metadata_from_project(project_id : &String) -> Result<ProjectMetadata, MetadataError>{
+    let output_dir = get_output_dir();
+    let metadata_path = output_dir.join(&project_id).join("metadata.json");
+    let metadata_bytes = fs::read(&metadata_path).await?;
+    return serde_json::from_slice(&metadata_bytes).map_err(MetadataError::SerdeError);
+}
+
+pub fn save_project_metadata(metadata: &ProjectMetadata, project_id: &String) -> Result<(), MetadataError> {
+    let output_dir = get_output_dir();
+    let metadata_path = output_dir.join(&project_id).join("metadata.json");
+
     // Open the file with write and truncate options
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .truncate(true)
         .create(true)
         .open(metadata_path)
-        .expect("Failed to open metadata.json");
+        .map_err(MetadataError::IoError)?;
 
     // Serialize the metadata to a pretty JSON string
     let serialized_metadata = to_string_pretty(metadata)?;
@@ -91,4 +101,9 @@ pub fn save_metadata(metadata: &ProjectMetadata, metadata_path: &Path) -> Result
     file.write_all(serialized_metadata.as_bytes())?;
 
     Ok(())
+}
+
+pub fn generate_timestamped_path(base_path: &PathBuf, base_name: &str, extension: &str) -> PathBuf {
+    let timestamp = Utc::now().format("%Y%m%d%H%M%S").to_string();
+    base_path.join(format!("{}_{}.{}", base_name, timestamp, extension))
 }

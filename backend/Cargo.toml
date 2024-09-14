@@ -13,7 +13,7 @@ actix-cors = "0.7.0"
 futures-util= "0.3.30"
 mime = "0.3.16"
 tracing = "0.1.40"
-tokio = { version = "1.37.0", features = ["fs"] }
+tokio = { version = "1.37.0", features = ["fs", "process"] }
 uuid = { version = "1.8.0", features = ["v4"] }
 image = "0.25.1"
 serde = { version = "1.0.199", features = ["derive"] }
@@ -22,3 +22,6 @@ rayon = "1.10.0"
 chrono = "0.4.38"
 tracing-subscriber = "0.3.18"
 regex = "1.10.4"
+anyhow = "1.0.82"
+thiserror = "1.0.63"
+imageproc = "0.25.0"
