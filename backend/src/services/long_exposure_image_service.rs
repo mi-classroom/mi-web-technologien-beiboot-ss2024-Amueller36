@@ -1,10 +1,10 @@
-use tracing::log::debug;
+use tracing::log::trace;
 
 use crate::core::long_exposure_image_logic::create_long_exposure_image;
 use crate::error::ServiceError;
 use crate::models::FrameData;
-use crate::services::long_exposure_image_service::ServiceError::{CreateImageError};
-use crate::utils::{get_output_dir, read_metadata_from_project, save_metadata};
+use crate::services::long_exposure_image_service::ServiceError::CreateImageError;
+use crate::utils::{get_output_dir, read_metadata_from_project, save_project_metadata};
 
 pub async fn create_long_exposure_image_svc(
     project_id: String,
@@ -13,7 +13,7 @@ pub async fn create_long_exposure_image_svc(
     let output_dir = get_output_dir();
     let path_to_cut_images = output_dir.join(format!("{}/frames/", project_id));
 
-    debug!("Frames to include are: {:?}", frames_to_include);
+    trace!("Frames to include are: {:?}", frames_to_include);
 
     let path_to_long_exposure_img = create_long_exposure_image(path_to_cut_images, frames_to_include)
         .await
@@ -24,7 +24,7 @@ pub async fn create_long_exposure_image_svc(
     metadata.latest_long_exposure_image_name = Some(path_to_long_exposure_img.clone());
 
     // Save metadata asynchronously
-    save_metadata(&metadata, &project_id)?;
+    save_project_metadata(&metadata, &project_id)?;
 
     Ok(path_to_long_exposure_img)
 }

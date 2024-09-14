@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-
-
 #[derive(Debug, Serialize)]
 pub struct Project {
     pub id: String,
@@ -35,5 +33,5 @@ pub struct GetProjectsResponse {
 #[derive(Debug, Serialize)]
 pub struct UploadVideoResponse {
     pub message: &'static str,
-    pub video_id: String,
+    pub project_id: String,
 }

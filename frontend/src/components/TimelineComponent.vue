@@ -160,7 +160,7 @@ const removeFrameFromSelection = (frame: Frame) => {
 
 
 const sendUnselectedFrames = () => {
-  const unselectedFrames = displayedFrames.value.filter(frame => !selectedFrames.value.includes(frame));
+  const unselectedFrames = allFrames.value.filter(frame => !selectedFrames.value.includes(frame));
 
   const framesToInclude = unselectedFrames.map(frame => ({
     frame_number: frame.frameNumber,

@@ -53,8 +53,8 @@ pub async fn delete_project(project_id: web::Path<String>) -> HttpResponse {
 
 /**
 This endpoint accepts multipart form data to either create a new project or update an existing one.
-- If a `video_id` is provided, it updates the existing project, if a different fps or scale was provided, and skips uploading the video file.
-- If no `video_id` is provided, it creates a new project and expects a video file to be uploaded.
+- If a `project_id` is provided, it updates the existing project, if a different fps or scale was provided, and skips uploading the video file.
+- If no `project_id` is provided, it creates a new project and expects a video file to be uploaded.
 */
 #[post("/projects")]
 pub async fn create_or_update_project(mut payload: Multipart) -> HttpResponse {
@@ -70,7 +70,7 @@ pub async fn create_or_update_project(mut payload: Multipart) -> HttpResponse {
         let name = content_disposition.get_name().unwrap_or_default();
 
         match name {
-            "video_id" => {
+            "project_id" => {
                 let id = read_text_from_field(field).await;
                 info!("Video id is {}", id);
                 video_id = Some(Uuid::from_str(&id).unwrap());
@@ -114,7 +114,7 @@ pub async fn create_or_update_project(mut payload: Multipart) -> HttpResponse {
         Ok(response) => HttpResponse::Ok().json(response),
         Err(err) => {
             error!("An error occurred while uploading project: {}", err);
-            HttpResponse::InternalServerError().body("An error occurred while uploading the project")
+            HttpResponse::InternalServerError().body(format!("An error occurred while uploading the project {:?}", err))
         }
     }
 }

@@ -1,4 +1,3 @@
-use std::env;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
@@ -58,7 +57,7 @@ pub async fn create_directory_if_not_created_yet(path: &str) {
     }
 }
 pub async fn convert_image_path_to_serving_url(image_path: &PathBuf) -> String {
-    let domain = env::var("DOMAIN").unwrap_or_else(|_| "http://localhost:8081".to_string());
+    let domain = std::env::var("DOMAIN").unwrap_or_else(|_| "http://localhost:8081".to_string());
 
     // Resolve the absolute path and normalize it
     let absolute_path = fs::canonicalize(image_path).await.unwrap();
@@ -83,7 +82,7 @@ pub async fn read_metadata_from_project(project_id : &String) -> Result<ProjectM
     return serde_json::from_slice(&metadata_bytes).map_err(MetadataError::SerdeError);
 }
 
-pub fn save_metadata(metadata: &ProjectMetadata, project_id: &String) -> Result<(), MetadataError> {
+pub fn save_project_metadata(metadata: &ProjectMetadata, project_id: &String) -> Result<(), MetadataError> {
     let output_dir = get_output_dir();
     let metadata_path = output_dir.join(&project_id).join("metadata.json");
 
@@ -93,7 +92,7 @@ pub fn save_metadata(metadata: &ProjectMetadata, project_id: &String) -> Result<
         .truncate(true)
         .create(true)
         .open(metadata_path)
-        .expect("Failed to open metadata.json");
+        .map_err(MetadataError::IoError)?;
 
     // Serialize the metadata to a pretty JSON string
     let serialized_metadata = to_string_pretty(metadata)?;

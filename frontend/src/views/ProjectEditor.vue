@@ -64,21 +64,22 @@ const props = defineProps<{
   projectId?: string
 }>()
 
-const videoCurrentPlaybackTime = ref(0);
 
 
 
+// Project Data
 const projectId: Ref<string | null> = ref(props.projectId ?? null);
+const projectName : Ref<string> = ref('');
+
 const videoFile: Ref<File | string | Blob | null> = ref(null);
 const usersLocalPathToUploadedVideo: Ref<string> = ref('');
 const videoUrlOnServer: Ref<string> = ref('');
-
 const videoSource = computed(() => {
   return usersLocalPathToUploadedVideo.value != "" ? usersLocalPathToUploadedVideo.value : videoUrlOnServer.value;
 })
+const videoCurrentPlaybackTime = ref(0);
 
-// Video Cut Settings
-const projectName : Ref<string> = ref('');
+
 const scale: Ref<string> = ref('');
 const framesPerSecond: Ref<number> = ref(0);
 
@@ -100,13 +101,13 @@ const displayVideoInPlayer = (event: Event) => {
   if (target.files && target.files.length > 0) {
     videoFile.value = target.files[0];
     usersLocalPathToUploadedVideo.value = URL.createObjectURL(videoFile.value);
-    resetTimelineRefsToDefault();
+    resetRefsForNewProject();
   }
 };
 
-const resetTimelineRefsToDefault = () => {
+const resetRefsForNewProject = () => {
   longExposureImageUrl.value = null;
-  projectId.value = null;
+  projectId.value = null;  
 };
 
 const uploadVideoScaleAndCutIntoFrames = async () => {
@@ -119,8 +120,8 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
 
   const formData = new FormData();
   if (projectId.value) {
-    console.log("Video id is :" + projectId.value)
-    formData.append('video_id', projectId.value)
+    console.log("Project id is :" + projectId.value)
+    formData.append('project_id', projectId.value)
   }
   if (videoFile.value) {
     formData.append('video_file', videoFile.value);
@@ -141,7 +142,7 @@ const uploadVideoScaleAndCutIntoFrames = async () => {
     const status: number = response.status;
     console.log(uploadResponse.message + ` status: ${status}`);
 
-    projectId.value = uploadResponse.video_id;
+    projectId.value = uploadResponse.project_id;
 
     //Adjust Url
     const newUrl = `/projects/${projectId.value}`;

@@ -4,18 +4,19 @@ use actix_web::web::BytesMut;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
-use tracing::log::{debug, error, info};
+use tracing::log::{debug, info};
 use uuid::Uuid;
 
+use crate::error::ServiceError;
 use crate::models::{Project, ProjectMetadata, UploadVideoResponse};
-use crate::utils::{convert_image_path_to_serving_url, get_output_dir, get_upload_dir, read_metadata_from_project, save_metadata};
+use crate::utils::{convert_image_path_to_serving_url, get_output_dir, get_upload_dir, read_metadata_from_project, save_project_metadata};
 
-pub async fn fetch_projects() -> Result<Vec<Project>, std::io::Error> {
+pub async fn fetch_projects() -> Result<Vec<Project>, ServiceError> {
     let output_dir = get_output_dir();
     let mut projects = Vec::new();
-    let mut stream = fs::read_dir(output_dir).await?;
+    let mut stream = fs::read_dir(output_dir).await.map_err(ServiceError::IoError)?;
 
-    while let Some(entry) = stream.next_entry().await? {
+    while let Some(entry) = stream.next_entry().await.map_err(ServiceError::IoError)? {
         let path = entry.path();
         if path.is_dir() {
             if let Some(project) = process_project_dir(&path).await {
@@ -67,16 +68,16 @@ async fn find_long_exposure_image(path: &Path) -> Option<PathBuf> {
     None
 }
 
-pub async fn delete_project_by_id(project_id: &str) -> Result<(), std::io::Error> {
+pub async fn delete_project_by_id(project_id: &str) -> Result<(), ServiceError> {
     let output_dir = get_output_dir();
     let upload_dir = get_upload_dir();
     let project_dir_path = output_dir.join(project_id);
 
     // Remove the uploaded video file
     let mut uploaded_file_found = false;
-    let mut dir_entries = fs::read_dir(&upload_dir).await?;
+    let mut dir_entries = fs::read_dir(&upload_dir).await.map_err(ServiceError::IoError)?;
 
-    while let Some(entry) = dir_entries.next_entry().await? {
+    while let Some(entry) = dir_entries.next_entry().await.map_err(ServiceError::IoError)? {
         let file_name = entry.file_name();
         let file_name_str = file_name.to_string_lossy();
 
@@ -85,7 +86,7 @@ pub async fn delete_project_by_id(project_id: &str) -> Result<(), std::io::Error
             let uploaded_file_path = upload_dir.join(&file_name);
 
             // Remove the uploaded video file
-            fs::remove_file(&uploaded_file_path).await?;
+            fs::remove_file(&uploaded_file_path).await.map_err(ServiceError::IoError)?;
             uploaded_file_found = true;
             break;
         }
@@ -95,10 +96,10 @@ pub async fn delete_project_by_id(project_id: &str) -> Result<(), std::io::Error
     if project_dir_path.exists() && project_dir_path.is_dir() {
         fs::remove_dir_all(project_dir_path).await?;
     } else if !uploaded_file_found {
-        return Err(std::io::Error::new(
+        return Err(ServiceError::from(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             "Project directory or uploaded video file not found",
-        ));
+        )));
     }
 
     Ok(())
@@ -146,7 +147,7 @@ pub async fn process_upload(
             info!("FPS and scale match existing metadata, skipping processing");
             return Ok(UploadVideoResponse {
                 message: "Processing skipped as FPS and scale match existing project",
-                video_id: video_id.to_string(),
+                project_id: video_id.to_string(),
             });
         }
     }
@@ -187,10 +188,10 @@ pub async fn process_upload(
         .ok_or("Invalid webp output path")?
         .to_string();
 
-    info!("{}", format!("Video file extension: {}", video_file_extension.to_string()));
-    info!("{}", format!("Upload save path: {}", uploaded_movie_save_file_path.to_str().unwrap()));
-    info!("{}", format!("FPS {}", fps.to_string()));
-    info!("{}", format!("Scale {}", scale));
+    debug!("Video file extension: {}", video_file_extension.to_string());
+    debug!("Upload save path: {}", uploaded_movie_save_file_path.to_str().unwrap());
+    debug!("FPS {}", fps.to_string());
+    debug!("Scale {}", scale);
 
 
     Command::new("ffmpeg")
@@ -225,7 +226,7 @@ pub async fn process_upload(
         ])
         .output()
         .await
-        .expect("Failed to execute ffmpeg");
+        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("There was an error calling FFMPEG {}", err)))?;
 
     // Save metadata to a file
     let metadata = ProjectMetadata {
@@ -236,10 +237,10 @@ pub async fn process_upload(
         latest_long_exposure_image_name: None,
     };
 
-    save_metadata(&metadata, &video_id.to_string())?;
+    save_project_metadata(&metadata, &video_id.to_string())?;
 
     Ok(UploadVideoResponse {
         message: "Video was uploaded successfully",
-        video_id: video_id.to_string(),
+        project_id: video_id.to_string(),
     })
 }
