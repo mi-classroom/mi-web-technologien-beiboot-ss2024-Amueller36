@@ -33,7 +33,7 @@ export interface ProjectDataResponse {
 
 export interface UploadResponse {
     message: string;
-    video_id: string;
+    project_id: string;
 }
 
 /* Project Picker Types */
